@@ -61,6 +61,8 @@ public class CreateTestView extends VBox {
             Label circle = new Label(String.valueOf(i + 1));
             circle.setStyle("-fx-min-width: 32; -fx-min-height: 32; -fx-alignment: center; -fx-background-radius: 16; -fx-font-weight: 700; -fx-font-size: 14px; " +
                     (step > i ? "-fx-background-color: #1e3fae; -fx-text-fill: white;" : "-fx-background-color: #e2e8f0; -fx-text-fill: #94a3b8;"));
+
+            
             Label label = new Label(stepLabels[i]);
             label.setStyle("-fx-font-weight: 500; " + (step > i ? "-fx-text-fill: #0f172a;" : "-fx-text-fill: #94a3b8;"));
             steps.getChildren().addAll(circle, label);
@@ -289,31 +291,50 @@ public class CreateTestView extends VBox {
         }
 
         // Test name + visibility
-        VBox nameCard = new VBox(12);
-        nameCard.getStyleClass().addAll("card", "card-sm");
-        nameCard.setPadding(new Insets(24));
-        Label nameLabel = new Label("TEST NAME");
-        nameLabel.getStyleClass().add("form-label");
+        // NAME CARD (Compact Version)
+        HBox nameCard = new HBox(16);
+        nameCard.setAlignment(Pos.CENTER_LEFT);
+        nameCard.setStyle("-fx-background-color: white; -fx-background-radius: 8; -fx-padding: 12; -fx-border-color: #e2e8f0; -fx-border-radius: 8;");
+        
+        Label nameLabel = new Label("TEST NAME:");
+        nameLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: #64748b; -fx-font-size: 11px;");
+        
         TextField nameField = new TextField(bankName);
         nameField.setPromptText("e.g., IELTS Listening Practice 01");
-        nameField.setStyle("-fx-font-size: 18px; -fx-font-weight: 700;");
+        nameField.setStyle("-fx-font-size: 14px; -fx-padding: 8; -fx-background-radius: 4; -fx-border-radius: 4; -fx-border-color: #cbd5e1;");
         nameField.textProperty().addListener((obs, old, val) -> bankName = val);
-
-        HBox visRow = new HBox(12);
-        visRow.setAlignment(Pos.CENTER_LEFT);
-        Label visLabel = new Label("VISIBILITY");
-        visLabel.getStyleClass().add("form-label");
+        HBox.setHgrow(nameField, Priority.ALWAYS);
+        
+        Label visLabel = new Label("VISIBILITY:");
+        visLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: #64748b; -fx-font-size: 11px;");
+        
         Button visBtn = new Button(isPublic ? "🌐 Public" : "🔒 Private");
-        visBtn.getStyleClass().addAll("btn", isPublic ? "btn-primary" : "btn-ghost");
-        visBtn.setOnAction(e -> { isPublic = !isPublic; visBtn.setText(isPublic ? "🌐 Public" : "🔒 Private"); });
-        visRow.getChildren().addAll(visLabel, visBtn);
-        nameCard.getChildren().addAll(nameLabel, nameField, visRow);
+        visBtn.getStyleClass().addAll("btn", isPublic ? "btn-primary" : "btn-ghost", "btn-sm");
+        
+        Runnable updateVisUi = () -> {
+            visBtn.setText(isPublic ? "🌐 Public" : "🔒 Private");
+            if (isPublic) {
+                visBtn.getStyleClass().add("btn-primary");
+                visBtn.getStyleClass().remove("btn-ghost");
+            } else {
+                visBtn.getStyleClass().add("btn-ghost");
+                visBtn.getStyleClass().remove("btn-primary");
+            }
+        };
+        
+        visBtn.setOnAction(e -> { 
+            isPublic = !isPublic; 
+            updateVisUi.run();
+        });
+        
+        nameCard.getChildren().addAll(nameLabel, nameField, visLabel, visBtn);
 
         // LEFT: Transcript pane using TranscriptPane component
         if (transcriptPane != null) transcriptPane.dispose();
         transcriptPane = new TranscriptPane(transcript, mediaPlayer);
-        transcriptPane.setPrefWidth(420);
-        transcriptPane.setMinWidth(320);
+        transcriptPane.setPrefWidth(550);
+        transcriptPane.setMinWidth(450);
+        HBox.setHgrow(transcriptPane, Priority.SOMETIMES);
 
         // RIGHT: Questions panel with type filter
         VBox questionsBox = new VBox(14);
@@ -372,10 +393,11 @@ public class CreateTestView extends VBox {
         qScroll.setStyle("-fx-background-color: transparent;");
         HBox.setHgrow(qScroll, Priority.ALWAYS);
 
-        HBox grid = new HBox(24);
-        grid.setPadding(new Insets(8, 0, 0, 0));
-        grid.getChildren().addAll(transcriptPane, qScroll);
-        VBox.setVgrow(grid, Priority.ALWAYS);
+        SplitPane splitPane = new SplitPane();
+        splitPane.getItems().addAll(transcriptPane, qScroll);
+        splitPane.setDividerPositions(0.40);
+        splitPane.setStyle("-fx-background-color: transparent; -fx-padding: 8 0 0 0;");
+        VBox.setVgrow(splitPane, Priority.ALWAYS);
 
         // Top action bar (always visible above the grid)
         HBox topActions = new HBox(12);
@@ -408,7 +430,7 @@ public class CreateTestView extends VBox {
         bottomSaveBtn.setOnAction(e -> handleSave(bottomSaveBtn));
         bottomButtons.getChildren().addAll(bSpacer, bottomSaveBtn);
 
-        getChildren().addAll(nameCard, topActions, grid, bottomButtons);
+        getChildren().addAll(nameCard, topActions, splitPane, bottomButtons);
     }
 
     private VBox buildReviewCard(Question q, boolean hasAudio) {

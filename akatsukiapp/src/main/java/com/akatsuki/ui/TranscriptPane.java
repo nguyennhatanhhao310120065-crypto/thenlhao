@@ -32,6 +32,7 @@ public class TranscriptPane extends VBox {
         this.mediaPlayer = mediaPlayer;
 
         setStyle("-fx-background-color: white; -fx-background-radius: 20; -fx-border-color: #e2e8f0; -fx-border-radius: 20;");
+        setMaxHeight(Double.MAX_VALUE);
         buildUI();
         if (mediaPlayer != null) setupAudioSync();
     }
@@ -39,18 +40,13 @@ public class TranscriptPane extends VBox {
     private void buildUI() {
         getChildren().clear();
 
-        VBox header = new VBox(8);
+        HBox header = new HBox(8);
         header.setPadding(new Insets(16, 20, 12, 20));
         header.setStyle("-fx-border-color: transparent transparent #f1f5f9 transparent; -fx-border-width: 0 0 1 0;");
 
         Label title = new Label("📝 Audio Transcript");
         title.setStyle("-fx-font-weight: 700; -fx-font-size: 15px;");
         header.getChildren().add(title);
-
-        if (mediaPlayer != null) {
-            HBox audioControls = buildAudioControls();
-            header.getChildren().add(audioControls);
-        }
 
         linesContainer = new VBox(0);
         linesContainer.setPadding(new Insets(8, 0, 8, 0));
@@ -62,6 +58,13 @@ public class TranscriptPane extends VBox {
         VBox.setVgrow(scrollPane, Priority.ALWAYS);
 
         getChildren().addAll(header, scrollPane);
+
+        if (mediaPlayer != null) {
+            HBox audioControls = buildAudioControls();
+            audioControls.setPadding(new Insets(12, 20, 16, 20));
+            audioControls.setStyle("-fx-border-color: #f1f5f9 transparent transparent transparent; -fx-border-width: 1 0 0 0;");
+            getChildren().add(audioControls);
+        }
     }
 
     private HBox buildAudioControls() {

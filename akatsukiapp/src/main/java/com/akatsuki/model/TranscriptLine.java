@@ -195,24 +195,48 @@ public class TranscriptLine {
         if (quote == null || quote.isEmpty()) return null;
         String normQuote = quote.toLowerCase().replaceAll("\\s+", " ").trim();
 
-        // Exact containment
+        // 1. Exact or Prefix containment on single line 
         for (TranscriptLine line : lines) {
             if (line.getText() == null || line.isPartHeader()) continue;
             String normText = line.getText().toLowerCase().replaceAll("\\s+", " ").trim();
-            if (normText.contains(normQuote) || normQuote.contains(normText)) {
-                return line;
+            // If the line contains the whole quote or a good prefix of it
+            if (normText.contains(normQuote)) return line;
+            if (normQuote.length() > 20 && normText.contains(normQuote.substring(0, 20))) return line;
+            // Only allow reverse constraint if the text is substantial
+            if (normText.length() > 15 && normQuote.contains(normText)) return line;
+        }
+
+        // 2. Continuous text mapping (robust across line breaks)
+        StringBuilder fullText = new StringBuilder();
+        List<Integer> lineStartIndices = new ArrayList<>();
+        List<TranscriptLine> validLines = new ArrayList<>();
+
+        for (TranscriptLine l : lines) {
+            if (l.getText() != null && !l.isPartHeader()) {
+                lineStartIndices.add(fullText.length());
+                validLines.add(l);
+                fullText.append(l.getText().toLowerCase().replaceAll("\\s+", " ").trim()).append(" ");
+            }
+        }
+        
+        String full = fullText.toString();
+        int idx = full.indexOf(normQuote);
+        if (idx < 0) {
+            // Try matching prefix of quote
+            String pref = normQuote.substring(0, Math.min(30, normQuote.length()));
+            idx = full.indexOf(pref);
+        }
+
+        if (idx >= 0) {
+            // Find which line corresponds to this idx
+            for (int i = validLines.size() - 1; i >= 0; i--) {
+                if (idx >= lineStartIndices.get(i)) {
+                    return validLines.get(i);
+                }
             }
         }
 
-        // Partial match: first 40 chars
-        String prefix = normQuote.substring(0, Math.min(40, normQuote.length()));
-        for (TranscriptLine line : lines) {
-            if (line.getText() == null || line.isPartHeader()) continue;
-            String normText = line.getText().toLowerCase().replaceAll("\\s+", " ").trim();
-            if (normText.contains(prefix) || prefix.contains(normText)) return line;
-        }
-
-        // Word overlap scoring
+        // 3. Fallback: Word overlap scoring (if Gemini paraphrased heavily)
         String[] quoteWords = normQuote.split("\\s+");
         TranscriptLine bestLine = null;
         int bestScore = 0;
@@ -237,24 +261,10 @@ public class TranscriptLine {
 
     public static double estimateTimeForQuote(List<TranscriptLine> lines, String quote, double totalDurationSec) {
         TranscriptLine line = findLineContainingQuote(lines, quote);
-        if (line != null && line.hasTimestamp()) return line.getStartTimeSec();
-
-        if (lines.isEmpty()) return 0;
-        StringBuilder fullText = new StringBuilder();
-        for (TranscriptLine l : lines) {
-            if (l.getText() != null && !l.isPartHeader()) fullText.append(l.getText()).append(" ");
+        if (line != null && line.hasTimestamp()) {
+            return line.getStartTimeSec();
         }
-        String full = fullText.toString().toLowerCase().replaceAll("\\s+", " ");
-        String normQuote = quote.toLowerCase().replaceAll("\\s+", " ");
-        int idx = full.indexOf(normQuote);
-        if (idx < 0) {
-            String pref = normQuote.substring(0, Math.min(30, normQuote.length()));
-            idx = full.indexOf(pref);
-        }
-        if (idx >= 0 && full.length() > 0) {
-            return ((double) idx / full.length()) * totalDurationSec;
-        }
-        return 0;
+        return 0; // Better safe than randomly forwarding the audio to extreme proportions
     }
 
     public static double estimateEndTimeForQuote(List<TranscriptLine> lines, String quote, double totalDurationSec) {

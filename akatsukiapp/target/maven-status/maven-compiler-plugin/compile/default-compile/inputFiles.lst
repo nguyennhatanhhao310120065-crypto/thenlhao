@@ -1,21 +1,21 @@
-/Users/anhhao/baitap/HT_DHMT/Bản sao akatsuki java/akatsukiapp/src/main/java/com/akatsuki/ui/TestEngineView.java
-/Users/anhhao/baitap/HT_DHMT/Bản sao akatsuki java/akatsukiapp/src/main/java/com/akatsuki/model/User.java
-/Users/anhhao/baitap/HT_DHMT/Bản sao akatsuki java/akatsukiapp/src/main/java/com/akatsuki/service/GeminiService.java
-/Users/anhhao/baitap/HT_DHMT/Bản sao akatsuki java/akatsukiapp/src/main/java/com/akatsuki/ui/MainView.java
-/Users/anhhao/baitap/HT_DHMT/Bản sao akatsuki java/akatsukiapp/src/main/java/com/akatsuki/ui/PracticeView.java
-/Users/anhhao/baitap/HT_DHMT/Bản sao akatsuki java/akatsukiapp/src/main/java/com/akatsuki/model/Question.java
-/Users/anhhao/baitap/HT_DHMT/Bản sao akatsuki java/akatsukiapp/src/main/java/com/akatsuki/ui/ResultsView.java
-/Users/anhhao/baitap/HT_DHMT/Bản sao akatsuki java/akatsukiapp/src/main/java/module-info.java
-/Users/anhhao/baitap/HT_DHMT/Bản sao akatsuki java/akatsukiapp/src/main/java/com/akatsuki/ui/SavedQuestionsView.java
-/Users/anhhao/baitap/HT_DHMT/Bản sao akatsuki java/akatsukiapp/src/main/java/com/akatsuki/model/TranscriptLine.java
-/Users/anhhao/baitap/HT_DHMT/Bản sao akatsuki java/akatsukiapp/src/main/java/com/akatsuki/model/Section.java
-/Users/anhhao/baitap/HT_DHMT/Bản sao akatsuki java/akatsukiapp/src/main/java/com/akatsuki/App.java
-/Users/anhhao/baitap/HT_DHMT/Bản sao akatsuki java/akatsukiapp/src/main/java/com/akatsuki/model/StudentResult.java
-/Users/anhhao/baitap/HT_DHMT/Bản sao akatsuki java/akatsukiapp/src/main/java/com/akatsuki/ui/LibraryView.java
-/Users/anhhao/baitap/HT_DHMT/Bản sao akatsuki java/akatsukiapp/src/main/java/com/akatsuki/ui/TranscriptPane.java
-/Users/anhhao/baitap/HT_DHMT/Bản sao akatsuki java/akatsukiapp/src/main/java/com/akatsuki/service/PromptBuilder.java
-/Users/anhhao/baitap/HT_DHMT/Bản sao akatsuki java/akatsukiapp/src/main/java/com/akatsuki/ui/QuestionBankView.java
-/Users/anhhao/baitap/HT_DHMT/Bản sao akatsuki java/akatsukiapp/src/main/java/com/akatsuki/ui/AuthView.java
-/Users/anhhao/baitap/HT_DHMT/Bản sao akatsuki java/akatsukiapp/src/main/java/com/akatsuki/database/DatabaseManager.java
-/Users/anhhao/baitap/HT_DHMT/Bản sao akatsuki java/akatsukiapp/src/main/java/com/akatsuki/model/QuestionBank.java
-/Users/anhhao/baitap/HT_DHMT/Bản sao akatsuki java/akatsukiapp/src/main/java/com/akatsuki/ui/CreateTestView.java
+E:\Code\file pbl\thenlhao\akatsukiapp\src\main\java\com\akatsuki\service\GeminiService.java
+E:\Code\file pbl\thenlhao\akatsukiapp\src\main\java\com\akatsuki\ui\TestEngineView.java
+E:\Code\file pbl\thenlhao\akatsukiapp\src\main\java\com\akatsuki\ui\AuthView.java
+E:\Code\file pbl\thenlhao\akatsukiapp\src\main\java\com\akatsuki\service\PromptBuilder.java
+E:\Code\file pbl\thenlhao\akatsukiapp\src\main\java\com\akatsuki\model\Question.java
+E:\Code\file pbl\thenlhao\akatsukiapp\src\main\java\com\akatsuki\database\DatabaseManager.java
+E:\Code\file pbl\thenlhao\akatsukiapp\src\main\java\module-info.java
+E:\Code\file pbl\thenlhao\akatsukiapp\src\main\java\com\akatsuki\model\QuestionBank.java
+E:\Code\file pbl\thenlhao\akatsukiapp\src\main\java\com\akatsuki\App.java
+E:\Code\file pbl\thenlhao\akatsukiapp\src\main\java\com\akatsuki\ui\SavedQuestionsView.java
+E:\Code\file pbl\thenlhao\akatsukiapp\src\main\java\com\akatsuki\model\StudentResult.java
+E:\Code\file pbl\thenlhao\akatsukiapp\src\main\java\com\akatsuki\model\TranscriptLine.java
+E:\Code\file pbl\thenlhao\akatsukiapp\src\main\java\com\akatsuki\ui\ResultsView.java
+E:\Code\file pbl\thenlhao\akatsukiapp\src\main\java\com\akatsuki\model\Section.java
+E:\Code\file pbl\thenlhao\akatsukiapp\src\main\java\com\akatsuki\ui\PracticeView.java
+E:\Code\file pbl\thenlhao\akatsukiapp\src\main\java\com\akatsuki\ui\MainView.java
+E:\Code\file pbl\thenlhao\akatsukiapp\src\main\java\com\akatsuki\ui\TranscriptPane.java
+E:\Code\file pbl\thenlhao\akatsukiapp\src\main\java\com\akatsuki\model\User.java
+E:\Code\file pbl\thenlhao\akatsukiapp\src\main\java\com\akatsuki\ui\CreateTestView.java
+E:\Code\file pbl\thenlhao\akatsukiapp\src\main\java\com\akatsuki\ui\QuestionBankView.java
+E:\Code\file pbl\thenlhao\akatsukiapp\src\main\java\com\akatsuki\ui\LibraryView.java

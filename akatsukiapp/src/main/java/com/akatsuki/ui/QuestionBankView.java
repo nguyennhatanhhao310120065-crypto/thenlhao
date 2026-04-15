@@ -182,8 +182,9 @@ public class QuestionBankView extends VBox {
 
         // LEFT: Transcript pane
         transcriptPane = new TranscriptPane(rawTranscript, mediaPlayer);
-        transcriptPane.setPrefWidth(450);
-        transcriptPane.setMinWidth(350);
+        transcriptPane.setPrefWidth(550);
+        transcriptPane.setMinWidth(450);
+        HBox.setHgrow(transcriptPane, Priority.SOMETIMES);
 
         // RIGHT: Questions panel with type filter
         VBox questionsPanel = new VBox(14);
@@ -233,12 +234,13 @@ public class QuestionBankView extends VBox {
         qScroll.setStyle("-fx-background-color: transparent;");
         HBox.setHgrow(qScroll, Priority.ALWAYS);
 
-        HBox grid = new HBox(24);
-        grid.setPadding(new Insets(8, 0, 0, 0));
-        grid.getChildren().addAll(transcriptPane, qScroll);
-        VBox.setVgrow(grid, Priority.ALWAYS);
+        SplitPane splitPane = new SplitPane();
+        splitPane.getItems().addAll(transcriptPane, qScroll);
+        splitPane.setDividerPositions(0.40);
+        splitPane.setStyle("-fx-background-color: transparent; -fx-padding: 8 0 0 0;");
+        VBox.setVgrow(splitPane, Priority.ALWAYS);
 
-        contentBox.getChildren().addAll(backBtn, headerBar, grid);
+        contentBox.getChildren().addAll(backBtn, headerBar, splitPane);
     }
 
     private void autoReTranscribe() {

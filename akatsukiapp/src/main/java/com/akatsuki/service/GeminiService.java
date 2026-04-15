@@ -76,37 +76,34 @@ public class GeminiService {
             CRITICAL RULES — READ ALL BEFORE STARTING:
             
             1. ROLE IDENTIFICATION:
-               - "Narrator" = the voice that reads TEST INSTRUCTIONS (e.g., "You will hear...", "Now look at Part 1",
-                 "Before you hear the rest of the conversation, you have some time to look at questions 4 to 10",
-                 "Now listen and answer questions 1 to 3"). These are NOT part of the conversation.
-               - "Speaker 1", "Speaker 2" = actual people in the CONVERSATION or LECTURE.
-               - NEVER label test instructions as Speaker. They are ALWAYS "Narrator".
+               - "Narrator" = the voice that reads TEST INSTRUCTIONS (e.g., "You will hear...", "Now look at Part 1", "Now listen and answer..."). These are NOT part of the conversation.
+               - For people in the actual conversation, USE GENDER OR ROLE LABELS instead of generic speaker numbers where possible (e.g., "Woman", "Man", "Interviewer", "Student", "Professor", "Customer", "Agent"). This helps greatly with clarity!
+               - If their role is unclear, use "Speaker 1 (Man)", "Speaker 2 (Woman)", etc.
+               - NEVER label test instructions as a conversational speaker. The instructions are ALWAYS "Narrator".
             
             2. PART STRUCTURE:
                - This audio likely contains multiple PARTS (Part 1, Part 2, Part 3, Part 4).
                - Mark each part with: === PART X === (on its own line, NO timestamp, NO speaker label).
-               - IMPORTANT: When a new part begins, RESET speaker numbers back to Speaker 1 and Speaker 2.
-                 Each part has its OWN set of speakers. Do NOT continue numbering from the previous part.
-               - Part 1 might have Speaker 1 and Speaker 2. Part 2 has different people, but still call them Speaker 1 and Speaker 2.
+               - IMPORTANT: Each part is a separate conversation. Re-evaluate who is speaking in each part.
             
-            3. TIMESTAMP FORMAT:
-               - EVERY spoken line MUST start with [MM:SS] timestamp.
-               - Part headers (=== PART X ===) do NOT get timestamps.
+            3. TIMESTAMP AND DIARIZATION FORMAT:
+               - EVERY spoken line MUST start with a [MM:SS] timestamp.
+               - Start a new line every time the speaker changes. This is CRITICAL for conversational flow.
                - Be accurate with timestamps. Do NOT repeat the same content at different timestamps.
                - Each sentence should appear EXACTLY ONCE. Never duplicate lines.
             
             4. LINE FORMAT:
                - Narrator lines: [MM:SS] Narrator: instruction text here
-               - Speaker lines:  [MM:SS] Speaker 1: spoken dialogue here
+               - Speaker lines:  [MM:SS] Woman: spoken dialogue here
                - Part headers:   === PART 1 ===
             
             5. SPEAKER COUNT PER PART:
-               - Most parts have exactly 2 speakers in conversation, or 1 speaker in a monologue/lecture.
-               - Do NOT create more than 3 speakers per part unless absolutely certain.
+               - Most parts have exactly 2-3 speakers in conversation, or 1 speaker in a monologue/lecture.
+               - Do NOT create excessive phantom speakers per part.
             
             6. ACCURACY:
                - Capture every word. Use proper punctuation.
-               - Start a new line when speaker changes or every 10-15 seconds.
+               - Start a new line when speaker changes or every 10-15 seconds if long monologue.
                - Output ONLY the transcript. No commentary.
             
             EXAMPLE OUTPUT:
