@@ -397,6 +397,42 @@ public class DatabaseManager {
         return results;
     }
 
+    // ---- Created Questions (history of all questions the user has created) ----
+    public List<Question> getCreatedQuestions(int userId) {
+        List<Question> questions = new ArrayList<>();
+        String sql = """
+            SELECT q.*, qb.bank_name, qb.exam_type, qb.created_at AS bank_created_at FROM questions q
+            JOIN sections s ON q.section_id = s.id
+            JOIN question_banks qb ON s.bank_id = qb.id
+            WHERE qb.created_by = ? ORDER BY qb.created_at DESC, q.question_number ASC
+            """;
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, userId);
+            ResultSet rs = ps.executeQuery();
+            while (rs.next()) {
+                Question q = new Question();
+                q.setId(rs.getInt("id"));
+                q.setSectionId(rs.getInt("section_id"));
+                q.setQuestionNumber(rs.getInt("question_number"));
+                q.setQuestionText(rs.getString("question_text"));
+                q.setCorrectAnswer(rs.getString("correct_answer"));
+                q.setExplanation(rs.getString("explanation"));
+                q.setQuestionType(rs.getString("question_type"));
+                String optJson = rs.getString("options");
+                if (optJson != null && !optJson.isEmpty()) {
+                    q.setOptions(gson.fromJson(optJson, new TypeToken<List<String>>() {}.getType()));
+                }
+                q.setTranscriptQuote(rs.getString("transcript_quote"));
+                q.setPartLabel(rs.getString("bank_name") + " | " + rs.getString("exam_type"));
+                q.setCreatedAt(rs.getString("bank_created_at"));
+                questions.add(q);
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return questions;
+    }
+
     // ---- Saved Questions ----
     public boolean saveQuestion(int userId, int questionId) {
         try (PreparedStatement ps = conn.prepareStatement("INSERT INTO saved_questions (user_id, question_id) VALUES (?, ?)")) {
