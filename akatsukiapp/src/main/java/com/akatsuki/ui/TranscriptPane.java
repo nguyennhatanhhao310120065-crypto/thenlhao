@@ -78,7 +78,7 @@ public class TranscriptPane extends VBox {
         stopBtn.setOnAction(e -> { if (mediaPlayer != null) mediaPlayer.stop(); });
 
         progressSlider = new Slider(0, 100, 0);
-        progressSlider.setPrefWidth(140);
+        progressSlider.setPrefWidth(240);
         HBox.setHgrow(progressSlider, Priority.ALWAYS);
 
         progressSlider.setOnMousePressed(e -> sliderDragging = true);

@@ -2,6 +2,7 @@ package com.akatsuki.ui;
 
 import com.akatsuki.database.DatabaseManager;
 import com.akatsuki.model.QuestionBank;
+import com.akatsuki.model.RankingEntry;
 import com.akatsuki.model.User;
 import javafx.geometry.*;
 import javafx.scene.control.*;
@@ -67,6 +68,7 @@ public class LibraryView extends VBox {
 
     private void loadBanks() {
         bankGrid.getChildren().clear();
+        // Everyone sees public tests; lecturers also see their own.
         List<QuestionBank> banks = DatabaseManager.getInstance().getBanks(user.getId());
         List<QuestionBank> filtered = currentFilter.equals("All") ? banks :
                 banks.stream().filter(b -> currentFilter.equals(b.getExamType())).toList();
@@ -79,8 +81,7 @@ public class LibraryView extends VBox {
         }
 
         for (QuestionBank b : filtered) {
-            VBox card = createBankCard(b);
-            bankGrid.getChildren().add(card);
+            bankGrid.getChildren().add(createBankCard(b));
         }
     }
 
@@ -120,12 +121,76 @@ public class LibraryView extends VBox {
         startBtn.setMaxWidth(Double.MAX_VALUE);
         startBtn.setOnAction(e -> onStartTest.accept(bank.getId()));
 
-        body.getChildren().addAll(name, meta, startBtn);
+        Button rankBtn = new Button("🏆 Bảng xếp hạng");
+        rankBtn.getStyleClass().addAll("btn", "btn-ghost");
+        rankBtn.setMaxWidth(Double.MAX_VALUE);
+        rankBtn.setOnAction(e -> showRanking(bank));
+
+        body.getChildren().addAll(name, meta, startBtn, rankBtn);
         card.getChildren().addAll(imgBox, body);
         card.setOnMouseClicked(e -> {
-            if (e.getTarget() != startBtn) onStartTest.accept(bank.getId());
+            if (e.getTarget() != startBtn && e.getTarget() != rankBtn) onStartTest.accept(bank.getId());
         });
         return card;
+    }
+
+    /** Shows the leaderboard for a bank in a dialog. */
+    private void showRanking(QuestionBank bank) {
+        Dialog<Void> dialog = new Dialog<>();
+        dialog.setTitle("Bảng xếp hạng");
+        dialog.setHeaderText("🏆 Bảng xếp hạng — " + bank.getBankName());
+        DialogPane pane = dialog.getDialogPane();
+        pane.getButtonTypes().add(ButtonType.CLOSE);
+
+        VBox content = new VBox(8);
+        content.setPadding(new Insets(12));
+        content.setPrefWidth(440);
+
+        List<RankingEntry> ranking = DatabaseManager.getInstance().getRanking(bank.getId());
+        if (ranking.isEmpty()) {
+            Label empty = new Label("Chưa có ai hoàn thành đề này. Hãy là người đầu tiên!");
+            empty.setStyle("-fx-text-fill: #64748b; -fx-padding: 16;");
+            content.getChildren().add(empty);
+        } else {
+            for (RankingEntry r : ranking) content.getChildren().add(buildRankRow(r));
+        }
+
+        ScrollPane scroll = new ScrollPane(content);
+        scroll.setFitToWidth(true);
+        scroll.setPrefHeight(360);
+        scroll.setStyle("-fx-background-color: transparent;");
+        pane.setContent(scroll);
+        dialog.showAndWait();
+    }
+
+    private HBox buildRankRow(RankingEntry r) {
+        HBox row = new HBox(12);
+        row.setAlignment(Pos.CENTER_LEFT);
+        row.setPadding(new Insets(10, 14, 10, 14));
+        boolean top = r.getRank() <= 3;
+        row.setStyle("-fx-background-radius: 10; -fx-border-radius: 10; -fx-border-width: 1; " +
+                (top ? "-fx-background-color: #fffbeb; -fx-border-color: #fde68a;"
+                     : "-fx-background-color: #f8fafc; -fx-border-color: #e2e8f0;"));
+
+        String medal = switch (r.getRank()) { case 1 -> "🥇"; case 2 -> "🥈"; case 3 -> "🥉"; default -> "#" + r.getRank(); };
+        Label rankLbl = new Label(medal);
+        rankLbl.setStyle("-fx-font-size: 16px; -fx-font-weight: 800; -fx-min-width: 36;");
+
+        VBox info = new VBox(2);
+        HBox.setHgrow(info, Priority.ALWAYS);
+        Label nameLbl = new Label(r.getUsername());
+        nameLbl.setStyle("-fx-font-weight: 700; -fx-text-fill: #0f172a;");
+        Label detail = new Label(r.getCorrectCount() + "/" + r.getTotalQuestions() + " câu đúng • "
+                + r.getAttempts() + " lần làm");
+        detail.setStyle("-fx-font-size: 11px; -fx-text-fill: #94a3b8;");
+        info.getChildren().addAll(nameLbl, detail);
+
+        Label score = new Label(String.format("%.1f/10", r.getBestScore()));
+        score.setStyle("-fx-font-size: 18px; -fx-font-weight: 800; -fx-text-fill: "
+                + (r.getBestScore() >= 7 ? "#059669" : "#1e3fae") + ";");
+
+        row.getChildren().addAll(rankLbl, info, score);
+        return row;
     }
 
     public void refresh() {

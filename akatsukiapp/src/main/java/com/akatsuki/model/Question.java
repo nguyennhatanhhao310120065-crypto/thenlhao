@@ -15,6 +15,8 @@ public class Question {
     private String transcriptQuote;
     private String partLabel;
     private String createdAt;
+    private String audioUrl;
+    private String transcript;
 
     public Question() {
         this.options = new ArrayList<>();
@@ -42,6 +44,10 @@ public class Question {
     public void setPartLabel(String partLabel) { this.partLabel = partLabel; }
     public String getCreatedAt() { return createdAt; }
     public void setCreatedAt(String createdAt) { this.createdAt = createdAt; }
+    public String getAudioUrl() { return audioUrl; }
+    public void setAudioUrl(String audioUrl) { this.audioUrl = audioUrl; }
+    public String getTranscript() { return transcript; }
+    public void setTranscript(String transcript) { this.transcript = transcript; }
 
     public String getNormalizedType() {
         if (questionType == null) return "fill_blank";

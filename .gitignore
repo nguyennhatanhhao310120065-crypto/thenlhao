@@ -6,3 +6,8 @@ target/
 
 # Claude Code local settings
 .claude/
+
+# Secrets — API keys must never be committed
+.env
+**/.env
+

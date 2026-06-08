@@ -10,6 +10,7 @@ import javafx.geometry.*;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.scene.media.*;
+import javafx.scene.text.TextAlignment;
 import javafx.stage.FileChooser;
 
 import java.io.File;
@@ -26,7 +27,6 @@ public class CreateTestView extends VBox {
     private int questionCount = 10;
     private List<Question> generatedQuestions;
     private String bankName = "";
-    private boolean isPublic = false;
     private Map<String, String> customInstructions = new HashMap<>();
     private MediaPlayer mediaPlayer;
     private TranscriptPane transcriptPane;
@@ -35,6 +35,10 @@ public class CreateTestView extends VBox {
     // AI Agent state
     private List<AIAgentService.PartConfig> agentConfigs = null;
     private VBox chatMessages;
+    private ScrollPane chatScroll;          // ref so we can auto-scroll to bottom without rebuilding
+    private VBox configPreviewHolder;       // ref so we can refresh config preview in place
+    private HBox actionButtonsBar;          // ref so we can refresh generate buttons in place
+    private boolean generating = false;     // true while AI is generating questions
 
     private static final Map<String, String[][]> EXAM_CONFIG = new LinkedHashMap<>();
     static {
@@ -182,9 +186,25 @@ public class CreateTestView extends VBox {
         // AI Agent chat panel (always visible below manual config)
         VBox agentPanel = buildAgentPanel();
 
-        // Bottom buttons
-        HBox buttons = new HBox(12);
-        buttons.setPadding(new Insets(16, 0, 0, 0));
+        // Bottom buttons (rebuilt in place when agent configs change)
+        actionButtonsBar = new HBox(12);
+        actionButtonsBar.setPadding(new Insets(16, 0, 0, 0));
+        rebuildActionButtons();
+
+        content.getChildren().addAll(audioCard, transcriptCard, examCard, agentPanel, actionButtonsBar);
+
+        ScrollPane scrollPane = new ScrollPane(content);
+        scrollPane.setFitToWidth(true);
+        scrollPane.setStyle("-fx-background-color: transparent;");
+        VBox.setVgrow(scrollPane, Priority.ALWAYS);
+        getChildren().add(scrollPane);
+    }
+
+    /** Rebuilds only the bottom generate buttons (called in place when agent configs change). */
+    private void rebuildActionButtons() {
+        if (actionButtonsBar == null) return;
+        actionButtonsBar.getChildren().clear();
+
         Button backBtn = new Button("◀ Back");
         backBtn.getStyleClass().addAll("btn", "btn-ghost");
         backBtn.setOnAction(e -> { step = 1; buildUI(); });
@@ -202,22 +222,14 @@ public class CreateTestView extends VBox {
             genManualBtn.setDisable(transcript.isEmpty() || selectedTypes.isEmpty());
             genManualBtn.setOnAction(e -> handleGenerate(genManualBtn));
 
-            buttons.getChildren().addAll(backBtn, bSpacer, genManualBtn, genAgentBtn);
+            actionButtonsBar.getChildren().addAll(backBtn, bSpacer, genManualBtn, genAgentBtn);
         } else {
             Button generateBtn = new Button("Generate " + (selectedTypes.size() * questionCount) + " Questions ⚡");
             generateBtn.getStyleClass().addAll("btn", "btn-primary", "btn-lg");
             generateBtn.setDisable(transcript.isEmpty() || selectedTypes.isEmpty());
             generateBtn.setOnAction(e -> handleGenerate(generateBtn));
-            buttons.getChildren().addAll(backBtn, bSpacer, generateBtn);
+            actionButtonsBar.getChildren().addAll(backBtn, bSpacer, generateBtn);
         }
-
-        content.getChildren().addAll(audioCard, transcriptCard, examCard, agentPanel, buttons);
-
-        ScrollPane scrollPane = new ScrollPane(content);
-        scrollPane.setFitToWidth(true);
-        scrollPane.setStyle("-fx-background-color: transparent;");
-        VBox.setVgrow(scrollPane, Priority.ALWAYS);
-        getChildren().add(scrollPane);
     }
 
     private VBox buildManualConfigCard() {
@@ -322,17 +334,15 @@ public class CreateTestView extends VBox {
                     "Audio có " + partCount + " part. Bạn muốn cấu hình gì?");
         }
 
-        ScrollPane chatScroll = new ScrollPane(chatMessages);
+        chatScroll = new ScrollPane(chatMessages);
         chatScroll.setFitToWidth(true);
         chatScroll.setStyle("-fx-background-color: transparent;");
         chatScroll.setPrefHeight(240);
         VBox.setVgrow(chatScroll, Priority.ALWAYS);
 
-        // Config preview
-        VBox configPreview = new VBox();
-        if (agentConfigs != null && !agentConfigs.isEmpty()) {
-            configPreview = buildConfigPreview();
-        }
+        // Config preview (kept in a holder so it can be refreshed in place)
+        configPreviewHolder = new VBox();
+        refreshConfigPreview();
 
         // Input area
         HBox inputBar = new HBox(10);
@@ -359,8 +369,17 @@ public class CreateTestView extends VBox {
 
         inputBar.getChildren().addAll(inputField, sendBtn);
 
-        panel.getChildren().addAll(agentHeader, chatScroll, configPreview, inputBar);
+        panel.getChildren().addAll(agentHeader, chatScroll, configPreviewHolder, inputBar);
         return panel;
+    }
+
+    /** Fills the config-preview holder based on current agentConfigs (no full rebuild). */
+    private void refreshConfigPreview() {
+        if (configPreviewHolder == null) return;
+        configPreviewHolder.getChildren().clear();
+        if (agentConfigs != null && !agentConfigs.isEmpty()) {
+            configPreviewHolder.getChildren().add(buildConfigPreview());
+        }
     }
 
     private VBox buildConfigPreview() {
@@ -443,6 +462,7 @@ public class CreateTestView extends VBox {
         loadingMsg.setStyle("-fx-font-size: 13px; -fx-text-fill: #94a3b8; -fx-font-style: italic; -fx-padding: 12 16;");
         loadingWrapper.getChildren().addAll(loadingAvatar, loadingMsg);
         chatMessages.getChildren().add(loadingWrapper);
+        scrollChatToBottom();
 
         int partCount = PromptBuilder.splitTranscriptByParts(transcript).size();
 
@@ -455,29 +475,42 @@ public class CreateTestView extends VBox {
                     if (response.isReady && !response.configs.isEmpty()) {
                         agentConfigs = response.configs;
                     }
-                    buildUI();
+                    // Update only the affected parts in place — no full rebuild, so the
+                    // user's scroll position on the page is preserved.
+                    refreshConfigPreview();
+                    rebuildActionButtons();
+                    scrollChatToBottom();
                 });
             } catch (Exception e) {
                 Platform.runLater(() -> {
                     chatMessages.getChildren().remove(loadingWrapper);
                     addBotMessage("Xin lỗi, đã có lỗi xảy ra: " + e.getMessage() + "\nVui lòng thử lại.");
+                    scrollChatToBottom();
                 });
             }
         }).start();
+    }
+
+    /** Scrolls the AI Agent chat area to the newest message. */
+    private void scrollChatToBottom() {
+        if (chatScroll == null) return;
+        // Defer until layout has been recomputed so the new height is known.
+        Platform.runLater(() -> chatScroll.setVvalue(1.0));
     }
 
     private void handleAgentGenerate(Button btn) {
         if (agentConfigs == null || agentConfigs.isEmpty()) return;
         if (transcript.isEmpty()) { showAlert("Transcript trống."); return; }
 
-        btn.setText("⏳ Đang tạo câu hỏi...");
-        btn.setDisable(true);
+        int total = agentConfigs.stream().mapToInt(c -> c.count).sum();
+        showGeneratingScreen(total);
 
         new Thread(() -> {
             try {
                 List<Question> questions = GeminiService.getInstance().generateWithAgentConfig(
                         transcript, examType, agentConfigs);
                 Platform.runLater(() -> {
+                    generating = false;
                     generatedQuestions = questions;
                     step = 3;
                     activeTypeFilter = null;
@@ -485,9 +518,9 @@ public class CreateTestView extends VBox {
                 });
             } catch (Exception e) {
                 Platform.runLater(() -> {
+                    generating = false;
+                    buildUI();
                     showAlert("Tạo câu hỏi thất bại: " + e.getMessage());
-                    btn.setText("✅ Xác nhận & Tạo câu hỏi ⚡");
-                    btn.setDisable(false);
                 });
             }
         }).start();
@@ -519,20 +552,15 @@ public class CreateTestView extends VBox {
         nameField.setPromptText("e.g., IELTS Listening Practice 01");
         nameField.setStyle("-fx-font-size: 18px; -fx-font-weight: 700;");
         nameField.textProperty().addListener((obs, old, val) -> bankName = val);
-        HBox visRow = new HBox(12);
-        visRow.setAlignment(Pos.CENTER_LEFT);
-        Label visLabel = new Label("VISIBILITY");
-        visLabel.getStyleClass().add("form-label");
-        Button visBtn = new Button(isPublic ? "🌐 Public" : "🔒 Private");
-        visBtn.getStyleClass().addAll("btn", isPublic ? "btn-primary" : "btn-ghost");
-        visBtn.setOnAction(e -> { isPublic = !isPublic; visBtn.setText(isPublic ? "🌐 Public" : "🔒 Private"); });
-        visRow.getChildren().addAll(visLabel, visBtn);
-        nameCard.getChildren().addAll(nameLabel, nameField, visRow);
+        Label visNote = new Label("🌐 Đề sẽ được đăng công khai để mọi người luyện tập trong Library.");
+        visNote.setStyle("-fx-font-size: 12px; -fx-text-fill: #64748b;");
+        nameCard.getChildren().addAll(nameLabel, nameField, visNote);
 
         if (transcriptPane != null) transcriptPane.dispose();
         transcriptPane = new TranscriptPane(transcript, mediaPlayer);
-        transcriptPane.setPrefWidth(420);
-        transcriptPane.setMinWidth(320);
+        transcriptPane.setPrefWidth(560);
+        transcriptPane.setMinWidth(460);
+        transcriptPane.setMinHeight(560);
 
         VBox questionsBox = new VBox(14);
         Map<String, List<Question>> grouped = new LinkedHashMap<>();
@@ -638,12 +666,15 @@ public class CreateTestView extends VBox {
         }
 
         HBox ansBox = new HBox();
-        ansBox.setStyle("-fx-padding: 12; -fx-background-color: #ecfdf5; -fx-background-radius: 8;");
-        VBox ansContent = new VBox(2);
+        ansBox.setMaxWidth(Double.MAX_VALUE);
+        ansBox.setStyle("-fx-padding: 16; -fx-background-color: #ecfdf5; -fx-background-radius: 8;");
+        VBox ansContent = new VBox(4);
+        HBox.setHgrow(ansContent, Priority.ALWAYS);
         Label ansLabel = new Label("CORRECT ANSWER");
-        ansLabel.setStyle("-fx-font-size: 10px; -fx-font-weight: 700; -fx-text-fill: rgba(5,150,105,0.5);");
+        ansLabel.setStyle("-fx-font-size: 11px; -fx-font-weight: 700; -fx-text-fill: rgba(5,150,105,0.5);");
         Label ansVal = new Label(q.getCorrectAnswer());
-        ansVal.setStyle("-fx-font-weight: 700; -fx-text-fill: #047857;");
+        ansVal.setWrapText(true);
+        ansVal.setStyle("-fx-font-size: 16px; -fx-font-weight: 700; -fx-text-fill: #047857;");
         ansContent.getChildren().addAll(ansLabel, ansVal);
         ansBox.getChildren().add(ansContent);
         qCard.getChildren().add(ansBox);
@@ -708,21 +739,59 @@ public class CreateTestView extends VBox {
     private void handleGenerate(Button btn) {
         if (transcript.isEmpty()) { showAlert("Please add a transcript first."); return; }
         if (selectedTypes.isEmpty()) { showAlert("Please select at least one question type."); return; }
-        btn.setText("Generating...");
-        btn.setDisable(true);
+        int total = selectedTypes.size() * questionCount;
+        showGeneratingScreen(total);
         new Thread(() -> {
             try {
                 List<Question> questions = GeminiService.getInstance().generateAllQuestions(
                         transcript, examType, selectedTypes, questionCount, customInstructions);
-                Platform.runLater(() -> { generatedQuestions = questions; step = 3; activeTypeFilter = null; buildUI(); });
+                Platform.runLater(() -> { generating = false; generatedQuestions = questions; step = 3; activeTypeFilter = null; buildUI(); });
             } catch (Exception e) {
                 Platform.runLater(() -> {
+                    generating = false;
+                    buildUI();
                     showAlert("Generate failed: " + e.getMessage());
-                    btn.setText("Generate " + (selectedTypes.size() * questionCount) + " Questions ⚡");
-                    btn.setDisable(false);
                 });
             }
         }).start();
+    }
+
+    /**
+     * Replaces the whole view with a full-page waiting screen while the AI generates
+     * questions. This gives clear feedback and discourages the user from leaving the page.
+     */
+    private void showGeneratingScreen(int total) {
+        generating = true;
+        getChildren().clear();
+
+        VBox panel = new VBox(24);
+        panel.setAlignment(Pos.CENTER);
+        panel.setFillWidth(false);
+        VBox.setVgrow(panel, Priority.ALWAYS);
+
+        ProgressIndicator spinner = new ProgressIndicator();
+        spinner.setPrefSize(72, 72);
+        spinner.setStyle("-fx-progress-color: #1e3fae;");
+
+        Label robot = new Label("🤖");
+        robot.setStyle("-fx-font-size: 40px;");
+
+        Label title = new Label("AI đang tạo " + total + " câu hỏi...");
+        title.setStyle("-fx-font-size: 24px; -fx-font-weight: 800; -fx-text-fill: #1e3fae;");
+
+        Label sub = new Label("Quá trình này có thể mất vài chục giây. Vui lòng KHÔNG chuyển tab hay đóng cửa sổ\nđể tránh mất dữ liệu — màn hình sẽ tự chuyển sang phần Review khi hoàn tất.");
+        sub.setWrapText(true);
+        sub.setTextAlignment(TextAlignment.CENTER);
+        sub.setStyle("-fx-font-size: 14px; -fx-text-fill: #64748b; -fx-line-spacing: 4;");
+
+        VBox card = new VBox(20, robot, spinner, title, sub);
+        card.setAlignment(Pos.CENTER);
+        card.setMaxWidth(560);
+        card.setPadding(new Insets(56, 48, 56, 48));
+        card.setStyle("-fx-background-color: white; -fx-background-radius: 24; -fx-border-color: #e2e8f0; -fx-border-radius: 24; -fx-border-width: 2;");
+
+        panel.getChildren().add(card);
+        getChildren().add(panel);
     }
 
     private void handleSave(Button btn) {
@@ -738,7 +807,7 @@ public class CreateTestView extends VBox {
         int bankId = DatabaseManager.getInstance().saveBank(name, user.getId(), examType,
                 audioFile.toURI().toString(), transcript, 0, 0, List.of(section));
         if (bankId > 0) {
-            showAlert("Test saved successfully!");
+            showAlert("Đã lưu đề (công khai) thành công! Mọi người sẽ thấy đề này trong Library.");
             step = 1; audioFile = null; audioPath = null; transcript = ""; generatedQuestions = null;
             bankName = ""; activeTypeFilter = null; agentConfigs = null; chatMessages = null; buildUI();
         } else {
@@ -755,6 +824,11 @@ public class CreateTestView extends VBox {
 
     public boolean hasUnsavedData() {
         return step == 3 && generatedQuestions != null && !generatedQuestions.isEmpty();
+    }
+
+    /** True while the AI is generating questions — used to block navigation away. */
+    public boolean isGenerating() {
+        return generating;
     }
 
     public boolean trySave() {

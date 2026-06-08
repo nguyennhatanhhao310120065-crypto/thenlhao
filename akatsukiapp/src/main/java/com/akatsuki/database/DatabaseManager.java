@@ -240,7 +240,7 @@ public class DatabaseManager {
             conn.setAutoCommit(false);
             int bankId;
             try (PreparedStatement ps = conn.prepareStatement(
-                    "INSERT INTO question_banks (bank_name, created_by, exam_type, audio_url, transcript, start_time, end_time) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO question_banks (bank_name, created_by, exam_type, audio_url, transcript, start_time, end_time, is_public) VALUES (?, ?, ?, ?, ?, ?, ?, 1)",
                     Statement.RETURN_GENERATED_KEYS)) {
                 ps.setString(1, bankName);
                 ps.setInt(2, createdBy);
@@ -397,11 +397,42 @@ public class DatabaseManager {
         return results;
     }
 
+    // ---- Ranking / leaderboard ----
+    /** Best attempt per student for a bank, ranked by score descending. */
+    public List<RankingEntry> getRanking(int bankId) {
+        List<RankingEntry> ranking = new ArrayList<>();
+        // SQLite: with a single MAX() aggregate, the bare columns come from that max row.
+        String sql = """
+            SELECT u.username, MAX(sr.score) AS best_score, COUNT(*) AS attempts,
+                   sr.correct_count, sr.total_questions, sr.completed_at
+            FROM student_results sr
+            JOIN users u ON sr.user_id = u.id
+            WHERE sr.bank_id = ?
+            GROUP BY sr.user_id, u.username
+            ORDER BY best_score DESC, sr.completed_at ASC
+            """;
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, bankId);
+            ResultSet rs = ps.executeQuery();
+            int rank = 0;
+            while (rs.next()) {
+                rank++;
+                ranking.add(new RankingEntry(rank, rs.getString("username"), rs.getDouble("best_score"),
+                        rs.getInt("correct_count"), rs.getInt("total_questions"),
+                        rs.getInt("attempts"), rs.getString("completed_at")));
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return ranking;
+    }
+
     // ---- Created Questions (history of all questions the user has created) ----
     public List<Question> getCreatedQuestions(int userId) {
         List<Question> questions = new ArrayList<>();
         String sql = """
-            SELECT q.*, qb.bank_name, qb.exam_type, qb.created_at AS bank_created_at FROM questions q
+            SELECT q.*, qb.bank_name, qb.exam_type, qb.created_at AS bank_created_at,
+                   qb.audio_url, qb.transcript FROM questions q
             JOIN sections s ON q.section_id = s.id
             JOIN question_banks qb ON s.bank_id = qb.id
             WHERE qb.created_by = ? ORDER BY qb.created_at DESC, q.question_number ASC
@@ -425,6 +456,8 @@ public class DatabaseManager {
                 q.setTranscriptQuote(rs.getString("transcript_quote"));
                 q.setPartLabel(rs.getString("bank_name") + " | " + rs.getString("exam_type"));
                 q.setCreatedAt(rs.getString("bank_created_at"));
+                q.setAudioUrl(rs.getString("audio_url"));
+                q.setTranscript(rs.getString("transcript"));
                 questions.add(q);
             }
         } catch (SQLException e) {
@@ -459,7 +492,7 @@ public class DatabaseManager {
     public List<Question> getSavedQuestions(int userId) {
         List<Question> questions = new ArrayList<>();
         String sql = """
-            SELECT q.*, qb.bank_name, qb.exam_type, qb.audio_url FROM questions q
+            SELECT q.*, qb.bank_name, qb.exam_type, qb.audio_url, qb.transcript FROM questions q
             JOIN saved_questions sq ON q.id = sq.question_id
             JOIN sections s ON q.section_id = s.id
             JOIN question_banks qb ON s.bank_id = qb.id
@@ -482,6 +515,8 @@ public class DatabaseManager {
                 }
                 q.setTranscriptQuote(rs.getString("transcript_quote"));
                 q.setPartLabel(rs.getString("bank_name") + " | " + rs.getString("exam_type"));
+                q.setAudioUrl(rs.getString("audio_url"));
+                q.setTranscript(rs.getString("transcript"));
                 questions.add(q);
             }
         } catch (SQLException e) {

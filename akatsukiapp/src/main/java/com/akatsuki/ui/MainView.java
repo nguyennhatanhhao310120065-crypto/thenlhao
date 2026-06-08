@@ -118,6 +118,10 @@ public class MainView extends BorderPane {
      * Returns true if it's safe to proceed (no unsaved data, or user confirmed).
      */
     private boolean confirmLeaveCreateTest() {
+        if (createTestView != null && createTestView.isGenerating()) {
+            showInfoAlert("⏳ AI đang tạo câu hỏi. Vui lòng đợi quá trình hoàn tất trước khi chuyển trang.");
+            return false;
+        }
         if (createTestView == null || !createTestView.hasUnsavedData()) return true;
 
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
@@ -240,5 +244,7 @@ public class MainView extends BorderPane {
         if (testEngineView != null) { testEngineView.dispose(); testEngineView = null; }
         if (practiceView != null) { practiceView.dispose(); practiceView = null; }
         if (createTestView != null) { createTestView.dispose(); createTestView = null; }
+        if (questionBankView != null) { questionBankView.dispose(); questionBankView = null; }
+        if (savedQuestionsView != null) { savedQuestionsView.dispose(); savedQuestionsView = null; }
     }
 }
