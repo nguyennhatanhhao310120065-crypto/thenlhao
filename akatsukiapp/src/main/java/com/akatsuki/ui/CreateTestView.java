@@ -804,8 +804,10 @@ public class CreateTestView extends VBox {
         section.setQuestions(generatedQuestions);
         btn.setText("Saving...");
         btn.setDisable(true);
+        // Copy audio to local storage so it's always accessible
+        String storedAudioUrl = DatabaseManager.getInstance().copyAudioToStorage(audioFile);
         int bankId = DatabaseManager.getInstance().saveBank(name, user.getId(), examType,
-                audioFile.toURI().toString(), transcript, 0, 0, List.of(section));
+                storedAudioUrl, transcript, 0, 0, List.of(section));
         if (bankId > 0) {
             showAlert("Đã lưu đề (công khai) thành công! Mọi người sẽ thấy đề này trong Library.");
             step = 1; audioFile = null; audioPath = null; transcript = ""; generatedQuestions = null;
@@ -838,8 +840,9 @@ public class CreateTestView extends VBox {
         section.setSectionNumber(1);
         section.setInstruction(examType + " Listening Comprehension — " + generatedQuestions.size() + " Questions");
         section.setQuestions(generatedQuestions);
+        String storedAudioUrl = DatabaseManager.getInstance().copyAudioToStorage(audioFile);
         int bankId = DatabaseManager.getInstance().saveBank(name, user.getId(), examType,
-                audioFile.toURI().toString(), transcript, 0, 0, List.of(section));
+                storedAudioUrl, transcript, 0, 0, List.of(section));
         if (bankId > 0) { generatedQuestions = null; return true; }
         return false;
     }

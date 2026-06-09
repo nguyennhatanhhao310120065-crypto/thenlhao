@@ -19,6 +19,7 @@ public class MainView extends BorderPane {
     private PracticeView practiceView;
     private ResultsView resultsView;
     private SavedQuestionsView savedQuestionsView;
+    private AdminView adminView;
     private Integer currentTestBankId = null;
 
     public MainView(User user, Runnable onLogout) {
@@ -60,7 +61,12 @@ public class MainView extends BorderPane {
         navLinks.setAlignment(Pos.CENTER_LEFT);
 
         String[][] tabs;
-        if (user.getRole() == 2) {
+        if (user.getRole() == 0) {
+            // Admin sees everything + Admin tab
+            tabs = new String[][]{
+                    {"library", "Library"}, {"create", "Create Test"}, {"banks", "Question Bank"}, {"saved", "Saved"}, {"results", "My Progress"}, {"admin", "Admin"}
+            };
+        } else if (user.getRole() == 2) {
             tabs = new String[][]{
                     {"library", "Library"}, {"practice", "Practice"}, {"saved", "Saved"}, {"results", "My Progress"}
             };
@@ -205,6 +211,12 @@ public class MainView extends BorderPane {
                 resultsView = new ResultsView(user);
                 contentArea.getChildren().add(resultsView);
             }
+            case "admin" -> {
+                if (user.getRole() == 0) {
+                    adminView = new AdminView(user);
+                    contentArea.getChildren().add(adminView);
+                }
+            }
         }
     }
 
@@ -233,6 +245,7 @@ public class MainView extends BorderPane {
                     case "banks" -> "Question Bank".equals(text);
                     case "saved" -> "Saved".equals(text);
                     case "results" -> "My Progress".equals(text);
+                    case "admin" -> "Admin".equals(text);
                     default -> false;
                 };
                 if (match) btn.getStyleClass().add("active");
@@ -246,5 +259,6 @@ public class MainView extends BorderPane {
         if (createTestView != null) { createTestView.dispose(); createTestView = null; }
         if (questionBankView != null) { questionBankView.dispose(); questionBankView = null; }
         if (savedQuestionsView != null) { savedQuestionsView.dispose(); savedQuestionsView = null; }
+        if (adminView != null) { adminView.dispose(); adminView = null; }
     }
 }

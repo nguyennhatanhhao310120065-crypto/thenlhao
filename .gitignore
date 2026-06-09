@@ -11,3 +11,12 @@ target/
 .env
 **/.env
 
+# Database (local data)
+*.db
+
+# Audio storage (local files)
+akatsukiapp/audio/
+
+# IDE files
+.idea/
+*.iml

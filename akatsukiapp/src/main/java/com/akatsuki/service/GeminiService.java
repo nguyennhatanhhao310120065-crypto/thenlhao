@@ -317,41 +317,100 @@ public class GeminiService {
 
     private List<Question> parseQuestions(String jsonText, String questionType) {
         List<Question> questions = new ArrayList<>();
+        if (jsonText == null || jsonText.isBlank()) return questions;
+
+        // Try normal parse first
         try {
-            JsonObject parsed = JsonParser.parseString(jsonText).getAsJsonObject();
-            JsonArray qArray = parsed.getAsJsonArray("questions");
-            if (qArray == null) return questions;
-            for (JsonElement el : qArray) {
-                JsonObject qObj = el.getAsJsonObject();
-                Question q = new Question();
-                q.setQuestionNumber(qObj.has("number") ? qObj.get("number").getAsInt() : 0);
-                q.setQuestionText(qObj.has("text") ? qObj.get("text").getAsString() : "");
-                q.setCorrectAnswer(qObj.has("answer") ? qObj.get("answer").getAsString() : "");
-                q.setExplanation(qObj.has("explanation") ? qObj.get("explanation").getAsString() : "");
-                q.setQuestionType(questionType);
-                q.setTranscriptQuote(qObj.has("transcript_quote") ? qObj.get("transcript_quote").getAsString() : "");
-                if (qObj.has("options")) {
-                    List<String> opts = gson.fromJson(qObj.getAsJsonArray("options"), new TypeToken<List<String>>() {}.getType());
-                    q.setOptions(opts);
-                }
-                questions.add(q);
+            questions = parseQuestionsFromJson(jsonText, questionType);
+            if (!questions.isEmpty()) return questions;
+        } catch (Exception ignored) {}
+
+        // Try to repair truncated JSON by closing brackets
+        String repaired = jsonText.trim();
+        if (!repaired.endsWith("}")) {
+            // Find last complete question object
+            int lastCloseBrace = repaired.lastIndexOf('}');
+            if (lastCloseBrace > 0) {
+                repaired = repaired.substring(0, lastCloseBrace + 1) + "]}";
+                try {
+                    questions = parseQuestionsFromJson(repaired, questionType);
+                    if (!questions.isEmpty()) {
+                        System.out.println("[JSON Repair] Recovered " + questions.size() + " questions from truncated response");
+                        return questions;
+                    }
+                } catch (Exception ignored) {}
             }
-        } catch (Exception e) {
-            System.err.println("Failed to parse questions JSON: " + e.getMessage());
+        }
+
+        // Last resort: extract individual question objects via regex
+        try {
+            var matcher = java.util.regex.Pattern.compile("\\{[^{}]*\"text\"[^{}]*\"answer\"[^{}]*\\}")
+                    .matcher(jsonText);
+            while (matcher.find()) {
+                try {
+                    JsonObject qObj = JsonParser.parseString(matcher.group()).getAsJsonObject();
+                    Question q = questionFromJsonObject(qObj, questionType);
+                    if (q != null) questions.add(q);
+                } catch (Exception ignored) {}
+            }
+            if (!questions.isEmpty()) {
+                System.out.println("[JSON Regex] Extracted " + questions.size() + " questions from malformed response");
+            }
+        } catch (Exception ignored) {}
+
+        if (questions.isEmpty()) {
+            System.err.println("Failed to parse questions JSON. Raw text (first 500 chars): " +
+                    jsonText.substring(0, Math.min(500, jsonText.length())));
         }
         return questions;
+    }
+
+    private List<Question> parseQuestionsFromJson(String jsonText, String questionType) {
+        List<Question> questions = new ArrayList<>();
+        JsonObject parsed = JsonParser.parseString(jsonText).getAsJsonObject();
+        JsonArray qArray = parsed.getAsJsonArray("questions");
+        if (qArray == null) return questions;
+        for (JsonElement el : qArray) {
+            Question q = questionFromJsonObject(el.getAsJsonObject(), questionType);
+            if (q != null) questions.add(q);
+        }
+        return questions;
+    }
+
+    private Question questionFromJsonObject(JsonObject qObj, String questionType) {
+        try {
+            Question q = new Question();
+            q.setQuestionNumber(qObj.has("number") ? qObj.get("number").getAsInt() : 0);
+            q.setQuestionText(qObj.has("text") ? qObj.get("text").getAsString() : "");
+            q.setCorrectAnswer(qObj.has("answer") ? qObj.get("answer").getAsString() : "");
+            q.setExplanation(qObj.has("explanation") ? qObj.get("explanation").getAsString() : "");
+            q.setQuestionType(questionType);
+            q.setTranscriptQuote(qObj.has("transcript_quote") ? qObj.get("transcript_quote").getAsString() : "");
+            if (qObj.has("options")) {
+                List<String> opts = gson.fromJson(qObj.getAsJsonArray("options"), new TypeToken<List<String>>() {}.getType());
+                q.setOptions(opts);
+            }
+            // Validate: must have text and answer
+            if (q.getQuestionText().isEmpty() || q.getCorrectAnswer().isEmpty()) return null;
+            return q;
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     /**
      * Generate questions using AI Agent per-part config.
      * Each PartConfig maps a specific question type to a specific transcript part.
+     * Requests are staggered to avoid Gemini API rate limits (503 errors).
      */
     public List<Question> generateWithAgentConfig(String transcript, String examType,
                                                    List<AIAgentService.PartConfig> configs) throws Exception {
         var parts = PromptBuilder.splitTranscriptByParts(transcript);
-        List<CompletableFuture<List<Question>>> futures = new ArrayList<>();
+        List<Question> allQuestions = new ArrayList<>();
 
-        for (AIAgentService.PartConfig cfg : configs) {
+        // Process sequentially with staggered delays to avoid 503 rate limits
+        for (int i = 0; i < configs.size(); i++) {
+            AIAgentService.PartConfig cfg = configs.get(i);
             int partIdx = cfg.partNumber - 1;
             String partText;
             String partLabel;
@@ -363,29 +422,40 @@ public class GeminiService {
                 partLabel = "Full Transcript";
             }
 
-            futures.add(CompletableFuture.supplyAsync(() -> {
+            System.out.println("[AgentGenerate] Generating Part " + cfg.partNumber + " (" + cfg.questionType + ", " + cfg.count + " questions)...");
+
+            // Add staggered delay between requests to avoid rate limiting
+            if (i > 0) {
+                try { Thread.sleep(2000); } catch (InterruptedException ignored) {}
+            }
+
+            try {
+                List<Question> qs = generateQuestions(partText, examType, cfg.questionType, cfg.count, partLabel, null);
+                System.out.println("[AgentGenerate] Part " + cfg.partNumber + " OK: " + qs.size() + " questions");
+                allQuestions.addAll(qs);
+            } catch (Exception e) {
+                System.err.println("[AgentGenerate] Part " + cfg.partNumber + " failed: " + e.getMessage());
+                // Retry once after a longer delay
                 try {
-                    return generateQuestions(partText, examType, cfg.questionType, cfg.count, partLabel, null);
-                } catch (Exception e) {
-                    System.err.println("Agent generate failed for Part " + cfg.partNumber + " " + cfg.questionType + ": " + e.getMessage());
-                    return List.of();
+                    System.out.println("[AgentGenerate] Retrying Part " + cfg.partNumber + " after 8s...");
+                    Thread.sleep(8000);
+                    List<Question> qs = generateQuestions(partText, examType, cfg.questionType, cfg.count, partLabel, null);
+                    System.out.println("[AgentGenerate] Part " + cfg.partNumber + " retry OK: " + qs.size() + " questions");
+                    allQuestions.addAll(qs);
+                } catch (Exception retryEx) {
+                    System.err.println("[AgentGenerate] Part " + cfg.partNumber + " retry also failed: " + retryEx.getMessage());
                 }
-            }));
-        }
-
-        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
-
-        List<Question> allQuestions = new ArrayList<>();
-        int num = 1;
-        for (var future : futures) {
-            for (Question q : future.get()) {
-                q.setQuestionNumber(num++);
-                allQuestions.add(q);
             }
         }
 
+        // Renumber all questions sequentially
+        int num = 1;
+        for (Question q : allQuestions) {
+            q.setQuestionNumber(num++);
+        }
+
         if (allQuestions.isEmpty()) {
-            throw new Exception("AI Agent: Tất cả yêu cầu đều thất bại. Vui lòng thử lại.");
+            throw new Exception("AI Agent: Tất cả yêu cầu đều thất bại. Gemini API có thể đang quá tải (503). Vui lòng đợi 30 giây rồi thử lại.");
         }
         return allQuestions;
     }

@@ -4,6 +4,10 @@ import com.akatsuki.model.*;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 
+import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
@@ -11,15 +15,41 @@ import java.util.List;
 public class DatabaseManager {
     private static DatabaseManager instance;
     private Connection conn;
+    private String dbDirectory; // directory where the database file lives
     private final Gson gson = new Gson();
 
     private DatabaseManager(String dbPath) {
         try {
+            this.dbDirectory = new File(dbPath).getParent();
             conn = DriverManager.getConnection("jdbc:sqlite:" + dbPath);
             conn.setAutoCommit(true);
             initTables();
         } catch (SQLException e) {
             throw new RuntimeException("Failed to initialize database", e);
+        }
+    }
+
+    /**
+     * Copy an audio file into the app's local `audio/` directory (next to the database)
+     * so it is always accessible regardless of the original file location.
+     * Returns the URI string of the stored copy (file:///...).
+     */
+    public String copyAudioToStorage(File audioFile) {
+        try {
+            Path audioDir = Path.of(dbDirectory, "audio");
+            Files.createDirectories(audioDir);
+
+            // Use a unique name: timestamp + original filename
+            String storedName = System.currentTimeMillis() + "_" + audioFile.getName();
+            Path dest = audioDir.resolve(storedName);
+            Files.copy(audioFile.toPath(), dest, StandardCopyOption.REPLACE_EXISTING);
+
+            System.out.println("[AudioStorage] Saved audio to: " + dest);
+            return dest.toUri().toString();
+        } catch (Exception e) {
+            System.err.println("[AudioStorage] Failed to copy audio: " + e.getMessage());
+            // Fallback: return the original file URI
+            return audioFile.toURI().toString();
         }
     }
 
@@ -535,5 +565,156 @@ public class DatabaseManager {
             e.printStackTrace();
         }
         return ids;
+    }
+
+    // ==================== ADMIN MANAGEMENT ====================
+
+    /** Get all users in the system (for admin panel). */
+    public List<User> getAllUsers() {
+        List<User> users = new ArrayList<>();
+        try (PreparedStatement ps = conn.prepareStatement(
+                "SELECT id, username, role, created_at FROM users ORDER BY id")) {
+            ResultSet rs = ps.executeQuery();
+            while (rs.next()) {
+                User u = new User(rs.getInt("id"), rs.getString("username"), rs.getInt("role"));
+                u.setCreatedAt(rs.getString("created_at"));
+                users.add(u);
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return users;
+    }
+
+    /** Update a user's role. */
+    public boolean updateUserRole(int userId, int newRole) {
+        try (PreparedStatement ps = conn.prepareStatement("UPDATE users SET role = ? WHERE id = ?")) {
+            ps.setInt(1, newRole);
+            ps.setInt(2, userId);
+            return ps.executeUpdate() > 0;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    /** Delete a user and all their related data. */
+    public boolean deleteUser(int userId) {
+        try {
+            conn.setAutoCommit(false);
+            // Delete saved questions by this user
+            conn.createStatement().executeUpdate("DELETE FROM saved_questions WHERE user_id = " + userId);
+            // Delete results by this user
+            conn.createStatement().executeUpdate("DELETE FROM student_results WHERE user_id = " + userId);
+            // Delete questions in banks created by this user
+            try (PreparedStatement ps = conn.prepareStatement(
+                    "SELECT id FROM question_banks WHERE created_by = ?")) {
+                ps.setInt(1, userId);
+                ResultSet rs = ps.executeQuery();
+                while (rs.next()) {
+                    int bankId = rs.getInt("id");
+                    try (PreparedStatement ps2 = conn.prepareStatement("SELECT id FROM sections WHERE bank_id = ?")) {
+                        ps2.setInt(1, bankId);
+                        ResultSet rs2 = ps2.executeQuery();
+                        while (rs2.next()) {
+                            int sid = rs2.getInt("id");
+                            conn.createStatement().executeUpdate(
+                                    "DELETE FROM saved_questions WHERE question_id IN (SELECT id FROM questions WHERE section_id = " + sid + ")");
+                            conn.createStatement().executeUpdate("DELETE FROM questions WHERE section_id = " + sid);
+                        }
+                    }
+                    conn.createStatement().executeUpdate("DELETE FROM sections WHERE bank_id = " + bankId);
+                    conn.createStatement().executeUpdate("DELETE FROM student_results WHERE bank_id = " + bankId);
+                }
+            }
+            conn.createStatement().executeUpdate("DELETE FROM question_banks WHERE created_by = " + userId);
+            conn.createStatement().executeUpdate("DELETE FROM users WHERE id = " + userId);
+            conn.commit();
+            conn.setAutoCommit(true);
+            return true;
+        } catch (SQLException e) {
+            try { conn.rollback(); conn.setAutoCommit(true); } catch (SQLException ex) { ex.printStackTrace(); }
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    /** Get all question banks (admin view — no user filter). */
+    public List<QuestionBank> getAllBanksAdmin() {
+        List<QuestionBank> banks = new ArrayList<>();
+        String sql = """
+            SELECT qb.*, u.username as creator_name,
+                (SELECT COUNT(*) FROM questions q JOIN sections s ON q.section_id = s.id WHERE s.bank_id = qb.id) as question_count
+            FROM question_banks qb
+            JOIN users u ON qb.created_by = u.id
+            ORDER BY qb.created_at DESC
+            """;
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ResultSet rs = ps.executeQuery();
+            while (rs.next()) {
+                QuestionBank b = new QuestionBank();
+                b.setId(rs.getInt("id"));
+                b.setBankName(rs.getString("bank_name"));
+                b.setCreatedBy(rs.getInt("created_by"));
+                b.setPublic(rs.getBoolean("is_public"));
+                b.setExamType(rs.getString("exam_type"));
+                b.setAudioUrl(rs.getString("audio_url"));
+                b.setTranscript(rs.getString("transcript"));
+                b.setStartTime(rs.getDouble("start_time"));
+                b.setEndTime(rs.getDouble("end_time"));
+                b.setCreatedAt(rs.getString("created_at"));
+                b.setCreatorName(rs.getString("creator_name"));
+                b.setQuestionCount(rs.getInt("question_count"));
+                banks.add(b);
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return banks;
+    }
+
+    /** Delete any bank (admin override — no ownership check). */
+    public boolean deleteBankAdmin(int bankId) {
+        try {
+            conn.setAutoCommit(false);
+            try (PreparedStatement ps = conn.prepareStatement("SELECT id FROM sections WHERE bank_id = ?")) {
+                ps.setInt(1, bankId);
+                ResultSet rs = ps.executeQuery();
+                while (rs.next()) {
+                    int sid = rs.getInt("id");
+                    conn.createStatement().executeUpdate(
+                            "DELETE FROM saved_questions WHERE question_id IN (SELECT id FROM questions WHERE section_id = " + sid + ")");
+                    conn.createStatement().executeUpdate("DELETE FROM questions WHERE section_id = " + sid);
+                }
+            }
+            conn.createStatement().executeUpdate("DELETE FROM sections WHERE bank_id = " + bankId);
+            conn.createStatement().executeUpdate("DELETE FROM student_results WHERE bank_id = " + bankId);
+            conn.createStatement().executeUpdate("DELETE FROM question_banks WHERE id = " + bankId);
+            conn.commit();
+            conn.setAutoCommit(true);
+            return true;
+        } catch (SQLException e) {
+            try { conn.rollback(); conn.setAutoCommit(true); } catch (SQLException ex) { ex.printStackTrace(); }
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    /** Get system-wide statistics for admin dashboard. Returns [totalUsers, totalBanks, totalQuestions, totalResults]. */
+    public int[] getSystemStats() {
+        int[] stats = new int[4];
+        try (Statement stmt = conn.createStatement()) {
+            ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM users");
+            if (rs.next()) stats[0] = rs.getInt(1);
+            rs = stmt.executeQuery("SELECT COUNT(*) FROM question_banks");
+            if (rs.next()) stats[1] = rs.getInt(1);
+            rs = stmt.executeQuery("SELECT COUNT(*) FROM questions");
+            if (rs.next()) stats[2] = rs.getInt(1);
+            rs = stmt.executeQuery("SELECT COUNT(*) FROM student_results");
+            if (rs.next()) stats[3] = rs.getInt(1);
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return stats;
     }
 }
